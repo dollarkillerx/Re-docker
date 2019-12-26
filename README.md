@@ -462,7 +462,9 @@ volumes:
  - cache/:/tmp/cache
  - ~/configs:/etc/configs/:ro
 ```
+
 	- 如果路径为数据卷名称，必须在文件中配置数据卷。
+
 ```
 version: "3"
 
@@ -476,4 +478,7 @@ volumes:
   mysql_data:
 ```
 
-
+### DockerCompoer的一些技巧
+	- `docker-compose up --scale work=3 -d`
+		- 动态扩容
+	
