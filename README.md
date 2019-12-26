@@ -261,8 +261,219 @@ RUN wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/downloa
 CMD [ "exec", "gosu", "redis", "redis-server" ]
 ```
 
+## Docker-Compose
+dokcer compose 是python编写的 
+安装可以使用打包好的二进制文件  也可以使用PIP安装
 
+### docker-compose 模板文件
+- command
+	- 覆盖容器启动后默认执行的命令
+	- `command:echo "hello world"`
+- container_name
+	- 指定容器的名称。默认将使用  项目名称_服务名称_序号
+	- `container_name: docker-web-container`
+- devices
+	- 指定设备映射关系
+	- `"/dev/ttyUSB1:/dev/ttyUSB0"`
+- depends_on
+	- 启动先后顺序
+```
+version: '3'
 
+services:
+  web:
+    build: .
+    depends_on:
+      - db
+      - redis
 
+  redis:
+    image: redis
+
+  db:
+    image: postgres
+```
+- dns
+	- 自定义 DNS 服务器。可以是一个值，也可以是一个列表。
+```
+dns: 8.8.8.8
+
+dns:
+  - 8.8.8.8
+  - 114.114.114.114
+```
+- env_file
+	- 从文件中获取环境变量，可以为单独的文件路径或列表。
+
+	- 如果通过 docker-compose -f FILE 方式来指定 Compose 模板文件，则 env_file 中变量的路径会基于模板文件路径。
+
+	- 如果有变量名称与 environment 指令冲突，则按照惯例，以后者为准。
+```
+env_file: .env
+
+env_file:
+  - ./common.env
+  - ./apps/web.env
+  - /opt/secrets.env
+```
+	- 环境变量文件中每一行必须符合格式，支持 # 开头的注释行。
+```
+# common.env: Set development environment
+PROG_ENV=development
+```
+
+- environment
+	- 设置环境变量。你可以使用数组或字典两种格式。
+
+	- 只给定名称的变量会自动获取运行 Compose 主机上对应变量的值，可以用来防止泄露不必要的数据。
+```
+environment:
+  RACK_ENV: development
+  SESSION_SECRET:
+
+environment:
+  - RACK_ENV=development
+  - SESSION_SECRET
+```
+	- 如果变量名称或者值中用到 true|false，yes|no 等表达 布尔 含义的词汇，最好放到引号里，避免 YAML 自动解析某些内容为对应的布尔语义。这些特定词汇，包括
+```
+y|Y|yes|Yes|YES|n|N|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF
+```
+
+- expose
+	- 暴露端口，但不映射到宿主机，只被连接的服务访问。
+
+	- 仅可以指定内部端口为参数
+```
+expose:
+ - "3000"
+ - "8000"
+```
+
+- extra_hosts
+	- 类似 Docker 中的 --add-host 参数，指定额外的 host 名称映射信息。
+```
+extra_hosts:
+ - "googledns:8.8.8.8"
+ - "dockerhub:52.1.157.61"
+```
+	- 会在启动后的服务容器中 /etc/hosts 文件中添加如下两条条目。
+```
+8.8.8.8 googledns
+52.1.157.61 dockerhub
+```
+
+- healthcheck
+	- 通过命令检查容器是否健康运行。
+```
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost"]
+  interval: 1m30s
+  timeout: 10s
+  retries: 3
+```
+- logging
+	- 配置日志选项。
+```
+logging:
+  driver: syslog
+  options:
+    syslog-address: "tcp://192.168.0.42:123"
+```
+
+	- 目前支持三种日志驱动类型。
+```
+driver: "json-file"
+driver: "syslog"
+driver: "none"
+```
+	- options 配置日志驱动的相关参数。
+```
+options:
+  max-size: "200k"
+  max-file: "10"
+```
+- networks
+	- 配置容器连接的网络。
+```
+version: "3"
+services:
+
+  some-service:
+    networks:
+     - some-network
+     - other-network
+
+networks:
+  some-network:
+  other-network:
+```
+- ports
+	- 暴露端口信息。
+
+	- 使用宿主端口：容器端口 (HOST:CONTAINER) 格式，或者仅仅指定容器的端口（宿主将会随机选择端口）都可以。
+```
+ports:
+ - "3000"
+ - "8000:8000"
+ - "49100:22"
+ - "127.0.0.1:8001:8001"
+```
+- secrets
+	- 存储敏感数据，例如 mysql 服务密码。
+```
+version: "3.1"
+services:
+
+mysql:
+  image: mysql
+  environment:
+    MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+  secrets:
+    - db_root_password
+    - my_other_secret
+
+secrets:
+  my_secret:
+    file: ./my_secret.txt
+  my_other_secret:
+    external: true
+```
+
+- ulimits
+	- 指定容器的 ulimits 限制值。
+
+	- 例如，指定最大进程数为 65535，指定文件句柄数为 20000（软限制，应用可以随时修改，不能超过硬限制） 和 40000（系统硬限制，只能 root 用户提高）。
+```
+  ulimits:
+    nproc: 65535
+    nofile:
+      soft: 20000
+      hard: 40000
+```
+
+- volumes
+	- 数据卷所挂载路径设置。可以设置为宿主机路径(HOST:CONTAINER)或者数据卷名称(VOLUME:CONTAINER)，并且可以设置访问模式 （HOST:CONTAINER:ro）。
+
+	- 该指令中路径支持相对路径。
+```
+volumes:
+ - /var/lib/mysql
+ - cache/:/tmp/cache
+ - ~/configs:/etc/configs/:ro
+```
+	- 如果路径为数据卷名称，必须在文件中配置数据卷。
+```
+version: "3"
+
+services:
+  my_src:
+    image: mysql:8.0
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+```
 
 
